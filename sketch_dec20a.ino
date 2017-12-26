@@ -33,6 +33,8 @@ void loop() {
   arTick();
 }
 
+// when used as a task, this only needs to be run
+// every ms or two. The pot only has 8-bit granularity
 void arTick() {
   if (millis() % 1000 == 0) {
     Serial.println("state");
