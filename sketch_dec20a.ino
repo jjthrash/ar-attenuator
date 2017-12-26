@@ -1,26 +1,25 @@
 #include <SPI.h>
 
-#define ATTENUATOR_CS 8 // atmega pin 14 (PCINT0/CLK0/ICP1/PB0) (I can choose this)
-#define ATTENUATOR_SI 11 // atmega pin 17 (MOSI/OC2A/PCINT3/PB2) (seems invariant)
+#define ATTENUATOR_CS 8   // atmega pin 14 (PCINT0/CLK0/ICP1/PB0) (I can choose this)
+#define ATTENUATOR_SI 11  // atmega pin 17 (MOSI/OC2A/PCINT3/PB2) (seems invariant)
 #define ATTENUATOR_SCK 13 // atmega pin 19 (SCK/PCINT5/PB5) (seems invariant)
-#define AUDIO_OUT_PIN 10 // I can choose this
-#define GATE_PIN 5 // test purposes
+#define AUDIO_OUT_PIN 10  // test purposes
+#define GATE_PIN 5        // test purposes
 
 #define ATTACK_PIN A0 // atmega pin 23
 
 typedef enum {
-  AR_STATE_LIMBO, // between notes
-  AR_STATE_ATTACK, // during attack rise
+  AR_STATE_LIMBO,   // between notes
+  AR_STATE_ATTACK,  // during attack rise
   AR_STATE_SUSTAIN, // key still depressed/note still on
-  AR_STATE_RELEASE // during release fall
+  AR_STATE_RELEASE  // during release fall
 } AR_STATE;
 
 unsigned long stateStartTimeMillis = 0;
-byte stateStartAttenuatorValue = 0;
-AR_STATE arState = AR_STATE_LIMBO;
+byte stateStartAttenuatorValue     = 0;
+AR_STATE arState                   = AR_STATE_LIMBO;
 
 void setup() {
-  // put your setup code here, to run once:
   pinMode(ATTENUATOR_CS, OUTPUT);
   pinMode(GATE_PIN, INPUT);
   digitalWrite(ATTENUATOR_CS, HIGH);
@@ -126,11 +125,8 @@ void setAttenuator(byte value) {
 }
 
 void MCP41010Write(byte value) {
-  // Note that the integer vale passed to this subroutine
-  // is cast to a byte
-  
   digitalWrite(ATTENUATOR_CS,LOW);
   SPI.transfer(B00010001); // This tells the chip to set the pot
   SPI.transfer(value);     // This tells it the pot position
-  digitalWrite(ATTENUATOR_CS,HIGH); 
+  digitalWrite(ATTENUATOR_CS,HIGH);
 }
