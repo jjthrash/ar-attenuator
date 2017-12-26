@@ -133,12 +133,12 @@ byte attenuatorLevel() {
 }
 
 void setAttenuator(byte value) {
-  MCP41010Write(value);
+  MCP41010Write(ATTENUATOR_CS, value);
 }
 
-void MCP41010Write(byte value) {
-  digitalWrite(ATTENUATOR_CS,LOW);
+void MCP41010Write(int csPin, byte value) {
+  digitalWrite(csPin,LOW);
   SPI.transfer(B00010001); // This tells the chip to set the pot
   SPI.transfer(value);     // This tells it the pot position
-  digitalWrite(ATTENUATOR_CS,HIGH);
+  digitalWrite(csPin,HIGH);
 }
