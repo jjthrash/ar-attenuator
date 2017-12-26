@@ -58,42 +58,54 @@ void arTick() {
   }
 }
 
+// waiting for input
 void tickLimbo() {
   setAttenuator(0);
+  // start attack when gate goes high
   if (gate() == HIGH) {
     changeState(AR_STATE_ATTACK);
   }
 }
 
+// attack phase, volume is rising
 void tickAttack() {
   int attack = attackValue();
   int newAttenuatorValue = stateStartAttenuatorValue + 240.0/(float)attack*(millis() - stateStartTimeMillis);
   setAttenuator(min(240, newAttenuatorValue));
+  // enter release phase if gate goes low during attack
   if (gate() == LOW) {
     stateStartAttenuatorValue = newAttenuatorValue;
     changeState(AR_STATE_RELEASE);
-  } else if (newAttenuatorValue >= 240) {
+  }
+  // the attack phase finishes when the attenuator value maxes out
+  else if (newAttenuatorValue >= 240) {
     stateStartAttenuatorValue = 240;
     changeState(AR_STATE_SUSTAIN);
   }
 }
 
+// sustain phase, waiting for gate to go low
 void tickSustain() {
   setAttenuator(240);
+  // enter release phase when gate goes low
   if (gate() == LOW) {
     stateStartAttenuatorValue = 240;
     changeState(AR_STATE_RELEASE);
   }
 }
 
+// release phase, volume is falling
 void tickRelease() {
   int release = releaseValue();
   int newAttenuatorValue = stateStartAttenuatorValue-240.0/release*(millis() - stateStartTimeMillis);
   setAttenuator(max(0, newAttenuatorValue));
+  // enter attack phase again if gate goes high during release
   if (gate() == HIGH) {
     stateStartAttenuatorValue = newAttenuatorValue;
     changeState(AR_STATE_ATTACK);
-  } else if (newAttenuatorValue <= 0) {
+  }
+  // the release phase finishes when attenuator value bottoms out
+  else if (newAttenuatorValue <= 0) {
     stateStartAttenuatorValue = 0;
     changeState(AR_STATE_LIMBO);
   }
