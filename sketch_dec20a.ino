@@ -52,19 +52,20 @@ AttackReleaseTask *attackReleaseTask = NULL;
 SoftwareSerial SoftSerial(MIDI_RX_PIN,MIDI_TX_PIN);
 MIDI_CREATE_INSTANCE(SoftwareSerial, SoftSerial, MIDI);
 
+int midiGateState = LOW;
 
 void handleNoteOn(byte inChannel, byte inNote, byte inVelocity) {
 Serial.println("note on");
 // set tone
   tone(AUDIO_OUT_PIN, sNotePitches[inNote]);
 // ar gate high
-  attackReleaseTask->setGate(HIGH);
+  midiGateState = HIGH;
 }
 
 void handleNoteOff(byte inChannel, byte inNote, byte inVelocity) {
 Serial.println("note off");
 // ar gate low
-  attackReleaseTask->setGate(LOW);
+  midiGateState = LOW;
 }
 
 void setup() {
@@ -88,7 +89,6 @@ unsigned long lastDebounceTime = 0;
 unsigned long debounceDelay = 50;
 
 void loop() {
-  attackReleaseTask->tick();
   MIDI.read();
 
   int readButtonState = digitalRead(GATE_PIN);
@@ -103,6 +103,10 @@ void loop() {
       gateButtonState = readButtonState;
     }
   }
+
+  int newGate = (midiGateState == HIGH || gateButtonState == LOW) ? HIGH : LOW;
+  attackReleaseTask->setGate(newGate);
+  attackReleaseTask->tick();
 }
 
 AttackReleaseTask::AttackReleaseTask(int attackPotPin, int releasePotPin, int attenuatorCSPin) :
