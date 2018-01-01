@@ -1,5 +1,10 @@
 #include <SPI.h>
+#include <MIDI.h>
+#include <SoftwareSerial.h>
+#include "pitches.h"
 
+#define MIDI_TX_PIN 6     // atmega pin 12 (PCINT22/OC0A/AIN0/PD6)
+#define MIDI_RX_PIN 7     // atmega pin 13 (PCINT23/AIN1/PD7)
 #define ATTENUATOR_CS 8   // atmega pin 14 (PCINT0/CLK0/ICP1/PB0) (I can choose this)
 #define ATTENUATOR_SI 11  // atmega pin 17 (MOSI/OC2A/PCINT3/PB2) (seems invariant)
 #define ATTENUATOR_SCK 13 // atmega pin 19 (SCK/PCINT5/PB5) (seems invariant)
@@ -41,6 +46,23 @@ private:
 
 AttackReleaseTask *attackReleaseTask = NULL;
 
+
+SoftwareSerial SoftSerial(MIDI_RX_PIN,MIDI_TX_PIN);
+MIDI_CREATE_INSTANCE(SoftwareSerial, SoftSerial, MIDI);
+
+
+void handleNoteOn(byte inChannel, byte inNote, byte inVelocity) {
+Serial.println("note on");
+// set tone
+  tone(AUDIO_OUT_PIN, sNotePitches[inNote]);
+// ar gate high
+}
+
+void handleNoteOff(byte inChannel, byte inNote, byte inVelocity) {
+Serial.println("note off");
+// ar gate low
+}
+
 void setup() {
   pinMode(ATTENUATOR_CS, OUTPUT);
   pinMode(GATE_PIN, INPUT);
@@ -49,10 +71,16 @@ void setup() {
   Serial.begin(19200);
   attackReleaseTask = new AttackReleaseTask(ATTACK_PIN, RELEASE_PIN, ATTENUATOR_CS);
   tone(AUDIO_OUT_PIN, 110);
+
+  MIDI.setHandleNoteOn(handleNoteOn);
+  MIDI.setHandleNoteOff(handleNoteOff);
+  MIDI.begin();
+//  MIDI.turnThruOn();
 }
 
 void loop() {
   attackReleaseTask->tick();
+  MIDI.read();
 }
 
 AttackReleaseTask::AttackReleaseTask(int attackPotPin, int releasePotPin, int attenuatorCSPin) :
