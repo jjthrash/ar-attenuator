@@ -69,7 +69,7 @@ Serial.println("note off");
 
 void setup() {
   pinMode(ATTENUATOR_CS, OUTPUT);
-  pinMode(GATE_PIN, INPUT);
+  pinMode(GATE_PIN, INPUT_PULLUP);
   digitalWrite(ATTENUATOR_CS, HIGH);
   SPI.begin();
   Serial.begin(19200);
@@ -82,9 +82,27 @@ void setup() {
 //  MIDI.turnThruOn();
 }
 
+int gateButtonState = HIGH;
+int lastGateButtonState = HIGH;
+unsigned long lastDebounceTime = 0;
+unsigned long debounceDelay = 50;
+
 void loop() {
   attackReleaseTask->tick();
   MIDI.read();
+
+  int readButtonState = digitalRead(GATE_PIN);
+  if (readButtonState != lastGateButtonState) {
+    lastDebounceTime = millis();
+    lastGateButtonState = readButtonState;
+  }
+
+  if (millis() - lastDebounceTime > debounceDelay) {
+    if (readButtonState != gateButtonState) {
+      Serial.println("button state changed");
+      gateButtonState = readButtonState;
+    }
+  }
 }
 
 AttackReleaseTask::AttackReleaseTask(int attackPotPin, int releasePotPin, int attenuatorCSPin) :
