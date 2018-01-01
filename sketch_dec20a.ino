@@ -6,7 +6,10 @@
 #define AUDIO_OUT_PIN 10  // test purposes
 #define GATE_PIN 5        // test purposes
 
-#define ATTACK_PIN A0 // atmega pin 23
+#define ATTACK_PIN A0  // atmega pin 23
+#define RELEASE_PIN A1 // atmega pin 24
+
+#define ATTENUATOR_MAX 240 // it really jumps at the high end.. not smooth
 
 typedef enum {
   AR_STATE_LIMBO,   // between notes
@@ -15,9 +18,28 @@ typedef enum {
   AR_STATE_RELEASE  // during release fall
 } AR_STATE;
 
-unsigned long stateStartTimeMillis = 0;
-byte stateStartAttenuatorValue     = 0;
-AR_STATE arState                   = AR_STATE_LIMBO;
+class AttackReleaseTask {
+public:
+  AttackReleaseTask(int attackPotPin, int releasePotPin, int attenuatorCSPin);
+  void tick();
+
+private:
+  AR_STATE state;
+  byte startAttenuatorValue;
+  unsigned long stateStartTimeMillis;
+  int attackPotPin, releasePotPin, attenuatorCSPin;
+  int attackValue, releaseValue;
+
+  void tickLimbo();
+  void tickAttack();
+  void tickSustain();
+  void tickRelease();
+  void changeState(AR_STATE value);
+  void setAttenuator(byte value);
+  void readKnobs();
+};
+
+AttackReleaseTask *attackReleaseTask = NULL;
 
 void setup() {
   pinMode(ATTENUATOR_CS, OUTPUT);
@@ -25,21 +47,34 @@ void setup() {
   digitalWrite(ATTENUATOR_CS, HIGH);
   SPI.begin();
   Serial.begin(19200);
+  attackReleaseTask = new AttackReleaseTask(ATTACK_PIN, RELEASE_PIN, ATTENUATOR_CS);
   tone(AUDIO_OUT_PIN, 110);
 }
 
 void loop() {
-  arTick();
+  attackReleaseTask->tick();
+}
+
+AttackReleaseTask::AttackReleaseTask(int attackPotPin, int releasePotPin, int attenuatorCSPin) :
+    attackPotPin(attackPotPin), releasePotPin(releasePotPin), attenuatorCSPin(attenuatorCSPin),
+    startAttenuatorValue(0), state(AR_STATE_LIMBO) {
+  stateStartTimeMillis = millis();
+  readKnobs();
+}
+
+void AttackReleaseTask::readKnobs() {
+  attackValue = analogRead(attackPotPin);
+  releaseValue = 500; //analogRead(releasePotPin);
 }
 
 // when used as a task, this only needs to be run
 // every ms or two. The pot only has 8-bit granularity
-void arTick() {
-  if (millis() % 1000 == 0) {
-    Serial.println("state");
-    Serial.println(arState);
+void AttackReleaseTask::tick() {
+  if (millis() % 10 == 0) { // every 10ms
+    readKnobs();
   }
-  switch (arState) {
+
+  switch (state) {
     case AR_STATE_LIMBO:
       tickLimbo();
       break;
@@ -53,13 +88,13 @@ void arTick() {
       tickRelease();
       break;
     default:
-      arState = AR_STATE_LIMBO;
+      state = AR_STATE_LIMBO;
       break;
   }
 }
 
 // waiting for input
-void tickLimbo() {
+void AttackReleaseTask::tickLimbo() {
   setAttenuator(0);
   // start attack when gate goes high
   if (gate() == HIGH) {
@@ -68,60 +103,50 @@ void tickLimbo() {
 }
 
 // attack phase, volume is rising
-void tickAttack() {
-  int attack = attackValue();
-  int newAttenuatorValue = stateStartAttenuatorValue + 240.0/(float)attack*(millis() - stateStartTimeMillis);
-  setAttenuator(min(240, newAttenuatorValue));
+void AttackReleaseTask::tickAttack() {
+  int newAttenuatorValue = startAttenuatorValue + (float)ATTENUATOR_MAX/(float)attackValue*(millis() - stateStartTimeMillis);
+  setAttenuator(min(ATTENUATOR_MAX, newAttenuatorValue));
   // enter release phase if gate goes low during attack
   if (gate() == LOW) {
-    stateStartAttenuatorValue = newAttenuatorValue;
+    startAttenuatorValue = newAttenuatorValue;
     changeState(AR_STATE_RELEASE);
   }
   // the attack phase finishes when the attenuator value maxes out
-  else if (newAttenuatorValue >= 240) {
-    stateStartAttenuatorValue = 240;
+  else if (newAttenuatorValue >= ATTENUATOR_MAX) {
+    startAttenuatorValue = ATTENUATOR_MAX;
     changeState(AR_STATE_SUSTAIN);
   }
 }
 
 // sustain phase, waiting for gate to go low
-void tickSustain() {
-  setAttenuator(240);
+void AttackReleaseTask::tickSustain() {
+  setAttenuator(ATTENUATOR_MAX);
   // enter release phase when gate goes low
   if (gate() == LOW) {
-    stateStartAttenuatorValue = 240;
+    startAttenuatorValue = ATTENUATOR_MAX;
     changeState(AR_STATE_RELEASE);
   }
 }
 
 // release phase, volume is falling
-void tickRelease() {
-  int release = releaseValue();
-  int newAttenuatorValue = stateStartAttenuatorValue-240.0/release*(millis() - stateStartTimeMillis);
+void AttackReleaseTask::tickRelease() {
+  int newAttenuatorValue = startAttenuatorValue-(float)ATTENUATOR_MAX/releaseValue*(millis() - stateStartTimeMillis);
   setAttenuator(max(0, newAttenuatorValue));
   // enter attack phase again if gate goes high during release
   if (gate() == HIGH) {
-    stateStartAttenuatorValue = newAttenuatorValue;
+    startAttenuatorValue = newAttenuatorValue;
     changeState(AR_STATE_ATTACK);
   }
   // the release phase finishes when attenuator value bottoms out
   else if (newAttenuatorValue <= 0) {
-    stateStartAttenuatorValue = 0;
+    startAttenuatorValue = 0;
     changeState(AR_STATE_LIMBO);
   }
 }
 
-void changeState(AR_STATE value) {
-  arState = value;
+void AttackReleaseTask::changeState(AR_STATE value) {
+  state = value;
   stateStartTimeMillis = millis();
-}
-
-int attackValue() {
-  return analogRead(ATTACK_PIN); //ms
-}
-
-int releaseValue() {
-  return 500; //ms
 }
 
 int gate() {
@@ -132,8 +157,8 @@ byte attenuatorLevel() {
   return (byte)(245.0*(sin((float)millis()/50)+1)/2.0);
 }
 
-void setAttenuator(byte value) {
-  MCP41010Write(ATTENUATOR_CS, value);
+void AttackReleaseTask::setAttenuator(byte value) {
+  MCP41010Write(attenuatorCSPin, value);
 }
 
 void MCP41010Write(int csPin, byte value) {
