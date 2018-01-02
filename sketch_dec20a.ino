@@ -79,10 +79,6 @@ void loop() {
 }
 
 
-byte attenuatorLevel() {
-  return (byte)(245.0*(sin((float)millis()/50)+1)/2.0);
-}
-
 void AttackReleaseTask::setAttenuator(byte value) {
   MCP41010Write(attenuatorCSPin, value);
 }
