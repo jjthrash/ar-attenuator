@@ -99,3 +99,14 @@ void AttackReleaseTask::changeState(AR_STATE value) {
   state = value;
   stateStartTimeMillis = millis();
 }
+
+void MCP41010Write(int csPin, byte value) {
+  digitalWrite(csPin,LOW);
+  SPI.transfer(B00010001); // This tells the chip to set the pot
+  SPI.transfer(value);     // This tells it the pot position
+  digitalWrite(csPin,HIGH);
+}
+
+void AttackReleaseTask::setAttenuator(byte value) {
+  MCP41010Write(attenuatorCSPin, value);
+}
