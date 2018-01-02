@@ -1,29 +1,27 @@
 #include "attack_release_task.hpp"
+#include <SPI.h>
 
 #define ATTENUATOR_MAX 240 // it really jumps at the high end.. not smooth
 
 AttackReleaseTask::AttackReleaseTask(int attackPotPin, int releasePotPin, int attenuatorCSPin) :
+    Task("AttackReleaseTask", 10),
     attackPotPin(attackPotPin), releasePotPin(releasePotPin), attenuatorCSPin(attenuatorCSPin),
-    startAttenuatorValue(0), state(AR_STATE_LIMBO), gateValue(LOW) {
+    startAttenuatorValue(0), state(AR_STATE_LIMBO),
+    gateValue(LOW), attackValue(1), releaseValue(1) {
   stateStartTimeMillis = millis();
-  readKnobs();
+}
+
+void AttackReleaseTask::setup() {
 }
 
 void AttackReleaseTask::setGate(int value) {
   gateValue = value;
 }
 
-void AttackReleaseTask::readKnobs() {
-  attackValue = analogRead(attackPotPin);
-  releaseValue = 500; //analogRead(releasePotPin);
-}
 
 // when used as a task, this only needs to be run
 // every ms or two. The pot only has 8-bit granularity
-void AttackReleaseTask::tick() {
-  if (millis() % 10 == 0) { // every 10ms
-    readKnobs();
-  }
+void AttackReleaseTask::run(unsigned long time) {
 
   switch (state) {
     case AR_STATE_LIMBO:
@@ -98,6 +96,14 @@ void AttackReleaseTask::tickRelease() {
 void AttackReleaseTask::changeState(AR_STATE value) {
   state = value;
   stateStartTimeMillis = millis();
+}
+
+void AttackReleaseTask::setAttack(int value) {
+  attackValue = value;
+}
+
+void AttackReleaseTask::setRelease(int value) {
+  releaseValue = value;
 }
 
 void MCP41010Write(int csPin, byte value) {

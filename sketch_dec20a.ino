@@ -3,6 +3,8 @@
 #include <SoftwareSerial.h>
 #include "pitches.h"
 #include "attack_release_task.hpp"
+#include "button_read_task.hpp"
+#include "analog_read_task.hpp"
 
 #define MIDI_TX_PIN 6     // atmega pin 12 (PCINT22/OC0A/AIN0/PD6)
 #define MIDI_RX_PIN 7     // atmega pin 13 (PCINT23/AIN1/PD7)
@@ -15,8 +17,10 @@
 #define ATTACK_PIN A0  // atmega pin 23
 #define RELEASE_PIN A1 // atmega pin 24
 
-AttackReleaseTask *attackReleaseTask = NULL;
-
+AttackReleaseTask attackReleaseTask(ATTACK_PIN, RELEASE_PIN, ATTENUATOR_CS);
+ButtonReadTask gateButtonReadTask(GATE_PIN);
+AnalogReadTask attackKnobReadTask(ATTACK_PIN, 200);
+//AnalogReadTask releaseKnobReadTask(RELEASE_PIN);
 
 SoftwareSerial SoftSerial(MIDI_RX_PIN,MIDI_TX_PIN);
 MIDI_CREATE_INSTANCE(SoftwareSerial, SoftSerial, MIDI);
@@ -43,38 +47,24 @@ void setup() {
   digitalWrite(ATTENUATOR_CS, HIGH);
   SPI.begin();
   Serial.begin(19200);
-  attackReleaseTask = new AttackReleaseTask(ATTACK_PIN, RELEASE_PIN, ATTENUATOR_CS);
   tone(AUDIO_OUT_PIN, 110);
 
   MIDI.setHandleNoteOn(handleNoteOn);
   MIDI.setHandleNoteOff(handleNoteOff);
   MIDI.begin();
 //  MIDI.turnThruOn();
+
+  TaskSystem.addTask(gateButtonReadTask);
+  TaskSystem.addTask(attackKnobReadTask);
+  //TaskSystem.addTask(releaseKnobReadTask);
+  TaskSystem.addTask(attackReleaseTask);
 }
 
-int gateButtonState = HIGH;
-int lastGateButtonState = HIGH;
-unsigned long lastDebounceTime = 0;
-unsigned long debounceDelay = 50;
-
 void loop() {
+  TaskSystem.execute();
   MIDI.read();
-
-  int readButtonState = digitalRead(GATE_PIN);
-  if (readButtonState != lastGateButtonState) {
-    lastDebounceTime = millis();
-    lastGateButtonState = readButtonState;
-  }
-
-  if (millis() - lastDebounceTime > debounceDelay) {
-    if (readButtonState != gateButtonState) {
-      Serial.println("button state changed");
-      gateButtonState = readButtonState;
-    }
-  }
-
-  int newGate = (midiGateState == HIGH || gateButtonState == LOW) ? HIGH : LOW;
-  attackReleaseTask->setGate(newGate);
-  attackReleaseTask->tick();
+  attackReleaseTask.setGate((midiGateState == HIGH || gateButtonReadTask.isButtonPressed()) ? HIGH : LOW);
+  attackReleaseTask.setAttack(attackKnobReadTask.getValue());
+  attackReleaseTask.setRelease(500);
 }
 
